@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Scene Graph 2D</title>
+
+<script>
+
+    var canvas;
+    var graphics;
+
+    var X_LEFT = -4;
+    var X_RIGHT = 4;
+    var Y_BOTTOM = -3;
+    var Y_TOP = 3;
+    
+    var BACKGROUND = "white";       
+    var pixelSize;         
+    var frameNumber = 0;  
+    var world;  
+    var wheels = [];
+
+    function createHeptagonWithSpokes() {
+        let wheel = new CompoundObject();
+        let sides = 7;
+        let radius = 0.5;
+
+        let heptagon = new SceneGraphNode();
+        heptagon.doDraw = function(g) {
+            g.beginPath();
+            for (let i = 0; i <= sides; i++) {
+                let angle = (2 * Math.PI / sides) * i;
+                let x = radius * Math.cos(angle);
+                let y = radius * Math.sin(angle);
+                if (i === 0) g.moveTo(x, y);
+                else g.lineTo(x, y);
+            }
+            g.closePath();
+            g.stroke();
+        };
+        wheel.add(heptagon);
+
+        for (let i = 0; i < sides; i++) {
+            let spoke = new SceneGraphNode();
+            spoke.doDraw = function(g) {
+                let angle = (2 * Math.PI / sides) * i;
+                let x = radius * Math.cos(angle);
+                let y = radius * Math.sin(angle);
+                g.beginPath();
+                g.moveTo(0, 0);
+                g.lineTo(x, y);
+                g.stroke();
+            };
+            wheel.add(spoke);
+        }
+
+        return wheel;
+    }
+
+    function createWheelWithSpokes() {
+        return createHeptagonWithSpokes();
+    }
+
+    function createSeesaw(x, y, scale, angle, color) {
+        let seesaw = new CompoundObject();
+        let seesawGroup = new CompoundObject();
+
+        let leftWheel = new TransformedObject(createWheelWithSpokes());
+        leftWheel.setTranslation(-1.5, 0);
+        wheels.push(leftWheel);
+
+        let rightWheel = new TransformedObject(createWheelWithSpokes());
+        rightWheel.setTranslation(1.5, 0);
+        wheels.push(rightWheel);
+
+        let beam = new TransformedObject(filledRect);
+        beam.setScale(3.5, 0.2).setColor("red");
+
+        seesawGroup.add(leftWheel).add(rightWheel).add(beam);
+        let transformedSeesaw = new TransformedObject(seesawGroup);
+        transformedSeesaw.setRotation(angle).setTranslation(x, y).setScale(scale, scale);
+
+        let support = new TransformedObject(filledTriangle);
+        support.setScale(scale, scale).setColor(color);
+        support.setTranslation(x, y - 0.4);
+
+        seesaw.add(transformedSeesaw);
+        seesaw.add(support);
+        return seesaw;
+    }
+
+    function createWorld() {
+        world = new CompoundObject();
+        world.add(createSeesaw(-2, 1.5, 1, -15, "purple"));
+        world.add(createSeesaw(2, 2, 0.8, -15, "green"));
+        world.add(createSeesaw(0, -1.5, 1.2, -15, "blue"));
+    }
+
+    function updateFrame() {
+        frameNumber++;
+        wheels.forEach(wheel => wheel.setRotation(frameNumber * 2));
+    }
+
+    function SceneGraphNode() {
+        this.fillColor = null;
+        this.strokeColor = null;
+    }
+    SceneGraphNode.prototype.draw = function(g) {
+        g.save();
+        if (this.fillColor) g.fillStyle = this.fillColor;
+        if (this.strokeColor) g.strokeStyle = this.strokeColor;
+        this.doDraw(g);
+        g.restore();
+    };
+    SceneGraphNode.prototype.setFillColor = function(color) {
+        this.fillColor = color;
+        return this;
+    };
+    SceneGraphNode.prototype.setStrokeColor = function(color) {
+        this.strokeColor = color;
+        return this;
+    };
+    SceneGraphNode.prototype.setColor = function(color) {
+        this.fillColor = this.strokeColor = color;
+        return this;
+    };
+
+    function CompoundObject() {
+        SceneGraphNode.call(this);
+        this.subobjects = [];
+    }
+    CompoundObject.prototype = Object.create(SceneGraphNode.prototype);
+    CompoundObject.prototype.add = function(node) {
+        this.subobjects.push(node);
+        return this;
+    };
+    CompoundObject.prototype.doDraw = function(g) {
+        this.subobjects.forEach(obj => obj.draw(g));
+    };
+
+    function TransformedObject(object) {
+        SceneGraphNode.call(this);
+        this.object = object;
+        this.rotation = 0;
+        this.scaleX = 1;
+        this.scaleY = 1;
+        this.translateX = 0;
+        this.translateY = 0;
+    }
+    TransformedObject.prototype = Object.create(SceneGraphNode.prototype);
+    TransformedObject.prototype.setRotation = function(angle) {
+        this.rotation = angle;
+        return this;
+    };
+    TransformedObject.prototype.setScale = function(sx, sy) {
+        this.scaleX = sx;
+        this.scaleY = sy;
+        return this;
+    };
+    TransformedObject.prototype.setTranslation = function(dx, dy) {
+        this.translateX = dx;
+        this.translateY = dy;
+        return this;
+    };
+    TransformedObject.prototype.doDraw = function(g) {
+        g.save();
+        g.translate(this.translateX, this.translateY);
+        g.rotate(this.rotation * Math.PI / 180);
+        g.scale(this.scaleX, this.scaleY);
+        this.object.draw(g);
+        g.restore();
+    };
+
+    var line = new SceneGraphNode();
+    line.doDraw = function(g) {
+        g.beginPath();
+        g.moveTo(-0.5, 0);
+        g.lineTo(0.5, 0);
+        g.stroke();
+    };
+
+    var filledRect = new SceneGraphNode();
+    filledRect.doDraw = function(g) {
+        g.fillRect(-0.5, -0.5, 1, 1);
+    };
+
+    var filledTriangle = new SceneGraphNode();
+    filledTriangle.doDraw = function(g) {
+        g.beginPath();
+        g.moveTo(-0.25, -0.75);
+        g.lineTo(0.25, -0.75);
+        g.lineTo(0, 0.5);
+        g.closePath();
+        g.fill();
+    };
+
+    function draw() {
+        graphics.save();
+        graphics.fillStyle = BACKGROUND;
+        graphics.fillRect(0, 0, canvas.width, canvas.height);
+        applyLimits(graphics, X_LEFT, X_RIGHT, Y_TOP, Y_BOTTOM, false);
+        graphics.lineWidth = pixelSize;
+        world.draw(graphics);
+        graphics.restore();
+    }
+
+    function applyLimits(g, xleft, xright, ytop, ybottom, preserveAspect) {
+        var width = canvas.width;
+        var height = canvas.height;
+        if (preserveAspect) {
+            var displayAspect = height / width;
+            var requestedAspect = (ybottom - ytop) / (xright - xleft);
+            if (displayAspect > requestedAspect) {
+                var excess = (ybottom - ytop) * (displayAspect / requestedAspect - 1);
+                ybottom += excess / 2;
+                ytop -= excess / 2;
+            } else {
+                var excess = (xright - xleft) * (requestedAspect / displayAspect - 1);
+                xright += excess / 2;
+                xleft -= excess / 2;
+            }
+        }
+        pixelSize = Math.min(
+            Math.abs((xright - xleft) / width),
+            Math.abs((ybottom - ytop) / height)
+        );
+        g.scale(width / (xright - xleft), height / (ybottom - ytop));
+        g.translate(-xleft, -ytop);
+    }
+
+    var running = false;
+    function frame() {
+        if (running) {
+            updateFrame();
+            draw();
+            requestAnimationFrame(frame);
+        }
+    }
+
+    function doAnimationCheckbox() { 
+        running = document.getElementById("animateCheck").checked;
+        if (running) requestAnimationFrame(frame);
+    }
+
+    function init() {
+        canvas = document.getElementById("thecanvas");
+        if (!canvas.getContext) {
+            document.getElementById("message").innerHTML = "ERROR: Canvas not supported";
+            return;
+        }
+        graphics = canvas.getContext("2d");
+        document.getElementById("animateCheck").onchange = doAnimationCheckbox; 
+        createWorld();
+        draw();
+    }
+
+</script>
+
+</head>
+<body onload="init()" style="background-color:#EEEEEE">
+<h3>Scene Graph</h3>
+<noscript><p style="color:red">Error: JavaScript required!</p></noscript>
+<p id="message"><label><input type="checkbox" id="animateCheck"><b>Run Animation</b></label></p>
+<div style="float:left; border: 2px solid black">
+<canvas id="thecanvas" width="800" height="600"></canvas>
+</div>
+</body>
+</html>
